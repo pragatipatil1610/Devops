@@ -1,12 +1,11 @@
 pipeline {
     agent any
 
-    environment {
-        DOCKERHUB_USER = credentials('dockerhub-username')
-        IMAGE           = "${DOCKERHUB_USER}/hostel-app"
-        EC2_HOST        = credentials('ec2-host')
-        EC2_USER        = 'ubuntu'
-    }
+   environment {
+    IMAGE    = "pragatipatil1610/hostel-app"
+    EC2_HOST = credentials('ec2-host')
+    EC2_USER = 'ubuntu'
+}
 
     stages {
 
