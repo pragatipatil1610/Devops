@@ -1,103 +1,136 @@
 # 🏠 SmartHostel — Student Hostel Management Website
 
-A modern, responsive static website for student hostel management. Built with plain HTML, CSS, and JavaScript — ready for AWS S3 hosting and DevOps CI/CD pipelines.
+A responsive static website for student hostel management.
+Stack: HTML + CSS + JS → Docker (nginx) → Jenkins CI/CD → AWS EC2
+
+---
 
 ## 📁 Project Structure
 
 ```
 DevopsHostelapp/
-├── index.html              # Home page
-├── css/
-│   └── style.css           # All styles (responsive + dark mode)
-├── js/
-│   └── main.js             # Theme toggle, nav, animations, forms
+├── index.html
+├── Dockerfile
+├── docker-compose.yml
+├── Jenkinsfile
+├── css/style.css
+├── js/main.js
 ├── pages/
-│   ├── facilities.html     # Facilities page
-│   ├── booking.html        # Room booking page
-│   ├── dashboard.html      # Student dashboard (UI)
-│   ├── complaints.html     # Complaints & feedback
-│   └── contact.html        # Contact us page
-└── README.md
+│   ├── facilities.html
+│   ├── booking.html
+│   ├── dashboard.html
+│   ├── complaints.html
+│   └── contact.html
+└── assets/
 ```
 
-## 🚀 Pages
+---
 
-| Page | File | Description |
-|------|------|-------------|
-| Home | `index.html` | Hero, overview, room preview, announcements |
-| Facilities | `pages/facilities.html` | Wi-Fi, Security, Laundry, Food, Study rooms |
-| Room Booking | `pages/booking.html` | Room cards + booking form |
-| Dashboard | `pages/dashboard.html` | Student info, fees, complaints (UI only) |
-| Complaints | `pages/complaints.html` | Submit complaint + feedback form |
-| Contact | `pages/contact.html` | Contact details, map, contact form, FAQ |
+## 🔄 CI/CD Pipeline
 
-## ✨ Features
+```
+GitHub Push → Webhook → Jenkins → Docker Build → DockerHub Push → SSH Deploy → AWS EC2
+```
 
-- ✅ Responsive design (mobile + desktop)
-- ✅ Dark / Light mode toggle (persisted in localStorage)
-- ✅ Smooth scroll animations (IntersectionObserver)
-- ✅ Toast notifications on form submit
-- ✅ Active nav link highlighting
-- ✅ Hamburger menu for mobile
-- ✅ Version badge in footer (easy to update per release)
+---
 
-## 🔧 Easy Content Updates (for CI/CD demos)
+## ⚙️ Step-by-Step Setup
 
-To simulate a new release, update any of these:
+### Step 1 — AWS EC2 Setup
 
-- **Version number**: Change `v1.0.0` → `v1.1.0` in all footer `version-badge` spans
-- **Announcement banner**: Edit the `notice-banner` div in `index.html`
-- **Room prices**: Update `room-price` divs in `booking.html` and `index.html`
-- **Announcements**: Edit the announcement cards in `index.html`
-- **Color theme**: Change `--primary` in `css/style.css`
-
-## ☁️ AWS S3 Deployment
+1. Launch an **Ubuntu 22.04** EC2 instance (t2.micro is fine)
+2. Open inbound ports: **22** (SSH), **80** (HTTP), **8080** (Jenkins)
+3. SSH into the instance and install Docker:
 
 ```bash
-# Build (no build step needed — static files)
-# Deploy to S3
-aws s3 sync . s3://your-bucket-name --delete --exclude ".git/*"
-
-# Enable static website hosting
-aws s3 website s3://your-bucket-name --index-document index.html --error-document index.html
+sudo apt update && sudo apt install -y docker.io
+sudo systemctl enable docker && sudo systemctl start docker
+sudo usermod -aG docker ubuntu
 ```
 
-## 🔄 CI/CD Pipeline (GitHub Actions example)
+### Step 2 — Jenkins Setup (on EC2 or separate server)
 
-```yaml
-name: Deploy to S3
-on:
-  push:
-    branches: [main, staging]
+```bash
+# Install Java
+sudo apt install -y openjdk-17-jdk
 
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Deploy to S3
-        run: aws s3 sync . s3://${{ secrets.S3_BUCKET }} --delete
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: ap-south-1
+# Install Jenkins
+curl -fsSL https://pkg.jenkins.io/debian/jenkins.io-2023.key | sudo tee /usr/share/keyrings/jenkins-keyring.asc > /dev/null
+echo deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] https://pkg.jenkins.io/debian binary/ | sudo tee /etc/apt/sources.list.d/jenkins.list > /dev/null
+sudo apt update && sudo apt install -y jenkins
+sudo systemctl start jenkins
+
+# Add jenkins user to docker group
+sudo usermod -aG docker jenkins
+sudo systemctl restart jenkins
 ```
 
-## 🌿 Suggested Git Branching Strategy
+Access Jenkins at: `http://<your-ec2-ip>:8080`
+
+### Step 3 — Jenkins Credentials
+
+Go to **Manage Jenkins → Credentials → Global** and add:
+
+| ID | Type | Value |
+|----|------|-------|
+| `dockerhub-creds` | Username/Password | Your DockerHub login |
+| `dockerhub-username` | Secret text | Your DockerHub username |
+| `ec2-ssh-key` | SSH Username with private key | Your EC2 `.pem` key content |
+| `ec2-host` | Secret text | Your EC2 public IP |
+
+### Step 4 — Jenkins Pipeline Job
+
+1. New Item → **Pipeline**
+2. Under **Pipeline**, select **Pipeline script from SCM**
+3. SCM: **Git**, URL: `https://github.com/28092005/Devops-lab.git`
+4. Branch: `*/main`
+5. Script Path: `Jenkinsfile`
+6. Save
+
+### Step 5 — GitHub Webhook
+
+1. Go to your repo → **Settings → Webhooks → Add webhook**
+2. Payload URL: `http://<jenkins-ip>:8080/github-webhook/`
+3. Content type: `application/json`
+4. Trigger: **Just the push event**
+5. Save
+
+In Jenkins job → **Build Triggers** → check **GitHub hook trigger for GITScm polling**
+
+### Step 6 — Update docker-compose.yml
+
+Replace `YOUR_DOCKERHUB_USERNAME` in `docker-compose.yml` with your actual DockerHub username.
+
+---
+
+## 🚀 How It Works After Setup
+
+1. You push code to `main` branch on GitHub
+2. GitHub sends webhook to Jenkins
+3. Jenkins pulls code, builds Docker image, tags with build number
+4. Image pushed to DockerHub
+5. Jenkins SSHs into EC2, pulls latest image, restarts container
+6. Site is live at `http://<ec2-ip>`
+
+---
+
+## 🌿 Branching Strategy
 
 ```
-main          → Production (v1.x.x)
-staging       → Pre-production testing
-feature/*     → New features (e.g. feature/online-payment)
-hotfix/*      → Urgent fixes
-release/*     → Release candidates
+main      → triggers production deploy
+staging   → for testing (add another pipeline stage if needed)
+feature/* → no auto-deploy
 ```
+
+---
 
 ## 📦 Version History
 
 | Version | Changes |
 |---------|---------|
-| v1.0.0 | Initial release — all 6 pages |
+| v1.0.0  | Initial release — all 6 pages |
+| v1.1.0  | Added Docker + Jenkins + AWS EC2 pipeline |
 
 ---
+
 *SmartHostel © 2025 — Built for DevOps CI/CD demonstration*

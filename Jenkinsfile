@@ -2,40 +2,72 @@ pipeline {
     agent any
 
     environment {
-        IMAGE = "your-dockerhub-username/hostel-app:latest"
+        DOCKERHUB_USER = credentials('dockerhub-username')
+        IMAGE           = "${DOCKERHUB_USER}/hostel-app"
+        EC2_HOST        = credentials('ec2-host')
+        EC2_USER        = 'ubuntu'
     }
 
     stages {
 
         stage('Checkout') {
             steps {
-                git 'https://github.com/itzzoya/DevopsHostelapp.git'
+                git branch: 'main', url: 'https://github.com/28092005/Devops-lab.git'
             }
         }
 
         stage('Build Docker Image') {
             steps {
-                sh 'docker build -t $IMAGE .'
+                sh "docker build -t ${IMAGE}:${BUILD_NUMBER} -t ${IMAGE}:latest ."
             }
         }
 
-        stage('Docker Login') {
+        stage('Push to DockerHub') {
             steps {
-                sh 'echo YOUR_DOCKERHUB_PASSWORD | docker login -u YOUR_DOCKERHUB_USERNAME --password-stdin'
+                withCredentials([usernamePassword(
+                    credentialsId: 'dockerhub-creds',
+                    usernameVariable: 'DH_USER',
+                    passwordVariable: 'DH_PASS'
+                )]) {
+                    sh """
+                        echo $DH_PASS | docker login -u $DH_USER --password-stdin
+                        docker push ${IMAGE}:${BUILD_NUMBER}
+                        docker push ${IMAGE}:latest
+                    """
+                }
             }
         }
 
-        stage('Push Image') {
+        stage('Deploy to AWS EC2') {
             steps {
-                sh 'docker push $IMAGE'
+                withCredentials([
+                    sshUserPrivateKey(credentialsId: 'ec2-ssh-key', keyFileVariable: 'SSH_KEY'),
+                    string(credentialsId: 'ec2-host', variable: 'EC2_HOST'),
+                    usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DH_USER', passwordVariable: 'DH_PASS')
+                ]) {
+                    sh """
+                        ssh -o StrictHostKeyChecking=no -i $SSH_KEY ${EC2_USER}@${EC2_HOST} '
+                            echo $DH_PASS | docker login -u $DH_USER --password-stdin
+                            docker pull ${IMAGE}:latest
+                            docker stop hostel-app || true
+                            docker rm hostel-app   || true
+                            docker run -d --name hostel-app -p 80:80 --restart always ${IMAGE}:latest
+                        '
+                    """
+                }
             }
         }
+    }
 
-        stage('Deploy to Kubernetes') {
-            steps {
-                sh 'kubectl apply -f k8s/deployment.yaml'
-                sh 'kubectl apply -f k8s/service.yaml'
-            }
+    post {
+        success {
+            echo "✅ Deployed successfully — Build #${BUILD_NUMBER}"
+        }
+        failure {
+            echo "❌ Pipeline failed — check logs above"
+        }
+        always {
+            sh 'docker logout || true'
         }
     }
 }

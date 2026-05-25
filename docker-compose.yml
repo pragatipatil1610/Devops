@@ -1,0 +1,9 @@
+version: '3.8'
+
+services:
+  hostel-app:
+    image: YOUR_DOCKERHUB_USERNAME/hostel-app:latest
+    container_name: hostel-app
+    ports:
+      - "80:80"
+    restart: always
