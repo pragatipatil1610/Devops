@@ -51,7 +51,7 @@ pipeline {
                             docker pull ${IMAGE}:latest
                             docker stop hostel-app || true
                             docker rm hostel-app   || true
-                            docker run -d --name hostel-app -p 80:80 --restart always ${IMAGE}:latest
+                            docker run -d --name hostel-app -p 8081:80 --restart always ${IMAGE}:latest
                         '
                     """
                 }
