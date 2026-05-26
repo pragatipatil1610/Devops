@@ -59,14 +59,17 @@ pipeline {
         }
     }
 
-    post {
-        success {
-            echo "✅ Deployed successfully — Build #${BUILD_NUMBER}"
-        }
-        failure {
-            echo "❌ Pipeline failed — check logs above"
-        }
-        always {
+  post {
+    success {
+        echo "✅ Deployed successfully — Build #${BUILD_NUMBER}"
+    }
+
+    failure {
+        echo "❌ Pipeline failed — check logs above"
+    }
+
+    always {
+        script {
             sh 'docker logout || true'
         }
     }
