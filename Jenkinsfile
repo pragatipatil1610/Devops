@@ -1,12 +1,12 @@
 pipeline {
     agent any
 
-    environment {
-        DOCKERHUB_USER = credentials('dockerhub-username')
-        IMAGE           = "${DOCKERHUB_USER}/hostel-app"
-        EC2_HOST        = credentials('ec2-host')
-        EC2_USER        = 'ubuntu'
-    }
+  environment {
+    DOCKERHUB_USER = 'your-dockerhub-username'
+    IMAGE = "your-dockerhub-username/hostel-app"
+    EC2_HOST = credentials('ec2-host')
+    EC2_USER = 'ubuntu'
+}
 
     stages {
 
@@ -59,7 +59,7 @@ pipeline {
         }
     }
 
-  post {
+post {
     success {
         echo "✅ Deployed successfully — Build #${BUILD_NUMBER}"
     }
@@ -73,4 +73,5 @@ pipeline {
             sh 'docker logout || true'
         }
     }
+}
 }
